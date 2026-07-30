@@ -1,0 +1,65 @@
+# ===== Brain Tumor LoRA 训练配置 · 路由消融版（YOLO-Master-EsMoE-N）=====
+# 与 yolo_master_brain_tumor_lora.yaml 的唯一区别：
+#   1) lora_target_modules 中显式加入路由内部的 Conv2d（routing_network.0 / routing_network.2）
+#   2) lora_exclude_modules 置为 []
+# 即"路由/门控层也参与 LoRA 微调"的对照组。实验表明该做法为明确负收益（见 README 路由消融一节）。
+task: detect
+mode: train
+model: YOLO-Master-EsMoE-N.pt        # 必须使用 .pt 预训练权重（使用 .yaml 会从随机初始化训练）
+data: brain-tumor.yaml               # 仓库内置，首次训练自动下载（仅 4MB）
+epochs: 50
+batch: 16                            # LoRA 轻量，A10 24G 充裕
+imgsz: 640
+max_det: 100                         # MRI 单图目标稀疏
+workers: 8
+cache: True
+optimizer: AdamW                     # 小数据 LoRA 微调下比 SGD 稳定
+lr0: 0.0005                          # 医疗数据学习率更保守
+warmup_epochs: 10                    # 延长 warmup，抑制高 rank 后期崩塌
+cos_lr: True
+amp: True
+seed: 42
+patience: 30
+close_mosaic: 0                      # 小数据集全程关闭 mosaic 更稳
+deterministic: True
+fraction: 1.0                        # 数据集小，使用全量数据
+
+lora_r: 8                            # rank 扫描时由命令行覆盖（消融实验使用 r=4）
+lora_alpha: 16                       # = 2*r（rank 扫描时同步覆盖）
+lora_use_rslora: True                # rsLoRA 缩放 = alpha/sqrt(r)，高 rank 更稳定
+lora_include_attention: False        # A2C2f 注意力路径敏感，不挂 LoRA
+lora_gradient_checkpointing: True
+lora_include_moe: True
+lora_include_head: True
+lora_save_adapters: True
+lora_dropout: 0.2                    # 小数据集加强正则
+lora_lr_mult: 0.2                    # LoRA 参数学习率倍率，进一步抑制过拟合
+lora_target_modules:                 # Conv 主干 + MoE Expert 投影层（扩宽版）+ 路由内部 Conv2d
+  - "conv"
+  - "fused_conv"
+  - "bottleneck.0"
+  - "shared_feature.0"
+  - "static_net.3"
+  - "proj"
+  - "expert_projections.0.0"
+  - "expert_projections.1.0"
+  - "expert_projections.2.0"
+  - "expert_projections.3.0"
+  - "expert_projections.4.0"
+  - "expert_projections.5.0"
+  - "expert_projections.6.0"
+  - "expert_projections.7.0"
+  - "expert_projections.8.0"
+  - "expert_projections.9.0"
+  - "expert_projections.10.0"
+  - "expert_projections.11.0"
+  - "expert_projections.12.0"
+  - "expert_projections.13.0"
+  - "expert_projections.14.0"
+  - "expert_projections.15.0"
+  - "shared_feature.3"
+  - "static_net.0"
+  - "feature_refiner.0"
+  - "routing_network.0"              # 路由内部第 1 个 Conv2d（消融关键差异）
+  - "routing_network.2"              # 路由内部第 2 个 Conv2d（消融关键差异）
+lora_exclude_modules: []             # 不排除任何模块，让路由层真实参与微调

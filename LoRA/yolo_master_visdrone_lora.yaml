@@ -1,0 +1,58 @@
+# ===== VisDrone LoRA 训练配置（YOLO-Master-EsMoE-N）=====
+# 航拍小目标场景：25% 子集模拟少样本 + 高分辨率多尺度
+task: detect
+mode: train
+model: YOLO-Master-EsMoE-N.pt       
+data: VisDrone.yaml                  # 仓库内置，首次训练自动下载（约 2GB）
+epochs: 40                           # rank 扫描时可由命令行覆盖；实际训练配合 patience 早停
+batch: 4                             # 768 + multi_scale 显存占用较高（A10 24G 实测）
+imgsz: 768                           # 高分辨率提升小目标召回
+multi_scale: True
+max_det: 1000                        # 航拍单图目标密集
+workers: 8
+cache: True
+optimizer: AdamW                     # 少样本 LoRA 微调下比 SGD 稳定
+lr0: 0.001
+warmup_epochs: 5
+cos_lr: True
+amp: True
+seed: 42
+patience: 30
+close_mosaic: 10
+deterministic: True
+fraction: 0.25                       # 25% 子集模拟垂类少样本场景
+
+lora_r: 8                            # rank 扫描时由命令行覆盖（4/8/16）
+lora_alpha: 16                       # = 2*r（rank 扫描时同步覆盖）
+lora_use_rslora: True                # rsLoRA 缩放 = alpha/sqrt(r)，高 rank 更稳定
+lora_include_attention: False        # A2C2f 注意力路径敏感，不挂 LoRA
+lora_gradient_checkpointing: True
+lora_include_moe: True
+lora_include_head: True
+lora_save_adapters: True
+lora_dropout: 0.1
+lora_lr_mult: 0.3                    # LoRA 参数学习率倍率，抑制少样本过拟合
+lora_target_modules:                 # Conv 主干 + MoE Expert 投影层
+  - "conv"
+  - "fused_conv"
+  - "bottleneck.0"
+  - "shared_feature.0"
+  - "static_net.3"
+  - "proj"
+  - "expert_projections.0.0"
+  - "expert_projections.1.0"
+  - "expert_projections.2.0"
+  - "expert_projections.3.0"
+  - "expert_projections.4.0"
+  - "expert_projections.5.0"
+  - "expert_projections.6.0"
+  - "expert_projections.7.0"
+  - "expert_projections.8.0"
+  - "expert_projections.9.0"
+  - "expert_projections.10.0"
+  - "expert_projections.11.0"
+  - "expert_projections.12.0"
+  - "expert_projections.13.0"
+  - "expert_projections.14.0"
+  - "expert_projections.15.0"
+lora_exclude_modules: ["router", "routing", "gate", "gating"]   # 确保路由/门控层不参与微调
